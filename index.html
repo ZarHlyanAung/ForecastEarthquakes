@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SeismoQuake GNN - Home</title>
+    
+    <style>
+        :root {
+            --neon-green: #00ff9d;
+            --neon-red: #ff0055;
+            --neon-blue: #00ccff;
+            --bg: #050505;
+            --panel: #111;
+        }
+        
+        body {
+            background-color: var(--bg);
+            color: #ccc;
+            font-family: 'Roboto Mono', monospace;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 600px;
+            padding: 20px;
+            width: 90%;
+        }
+        
+        h1 {
+            color: var(--neon-blue);
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 30px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 15px;
+        }
+        
+        .warning-card {
+            background: rgba(255, 0, 85, 0.05);
+            border: 1px solid var(--neon-red);
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 40px;
+            color: #fff;
+            box-shadow: 0 0 20px rgba(255, 0, 85, 0.1);
+        }
+        
+        .warning-card h2 {
+            color: var(--neon-red);
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .warning-text {
+            font-size: 0.95rem;
+            line-height: 1.7;
+            color: #ddd;
+            font-family: sans-serif;
+        }
+        
+        .launch-btn {
+            display: block;
+            width: 100%;
+            box-sizing: border-box;
+            padding: 18px;
+            background: #1a1a1a;
+            border: 2px solid var(--neon-green);
+            color: var(--neon-green);
+            font-family: inherit;
+            font-size: 1.1rem;
+            font-weight: bold;
+            text-align: center;
+            text-decoration: none;
+            text-transform: uppercase;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .launch-btn:hover {
+            background: var(--neon-green);
+            color: #000;
+            box-shadow: 0 0 20px rgba(0, 255, 157, 0.4);
+        }
+        
+        .version {
+            text-align: center;
+            margin-top: 25px;
+            font-size: 0.8rem;
+            color: #666;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Seismo-GNN System</h1>
+
+        <div class="warning-card">
+            <h2>⚠️ သတိပေးချက် (DISCLAIMER)</h2>
+            <div class="warning-text">
+                ဤအက်ပ်သည် ငလျင်အခြေအနေကို <b>ခန့်မှန်းချက် (Estimation)</b> အနေဖြင့်သာ ဖော်ပြခြင်းဖြစ်ပါသည်။ <b>၁၀၀% အပြည့်အဝ မယုံကြည်ပါနှင့်။</b><br><br>
+                ဤခန့်မှန်းချက်များသည် ပညာရေးနှင့် ကိုယ်ပိုင်လေ့လာရန် ရည်ရွယ်ချက် (Educational Purpose) အတွက်သာ ဖြစ်ပါသည်။ အက်ပ်သည် စမ်းသပ်ဆဲအဆင့် (Testing Stage) တွင်သာ ရှိပါသေးသည်။ မျက်ကန်းယုံကြည်မှုဖြင့် စိုးရိမ်ပူပန်နေမည့်အစား ခန့်မှန်းခြေအခြေအနေကိုသာ သိရှိနိုင်ရန် ကြိုးပမ်းထားခြင်း ဖြစ်ပါသည်။
+            </div>
+        </div>
+
+        <a href="gnnsv4.2.1.html" class="launch-btn">Launch Seismo-GNN v4.2.1</a>
+        
+        <div class="version">
+            System Status: Standby | Current Build: v4.2.1 (Target Focus)
+        </div>
+    </div>
+
+</body>
+</html>
