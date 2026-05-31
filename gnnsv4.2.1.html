@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SeismoQuake GNN v4.2.1 (Target Focus)</title>
+    
+    <script src="https://unpkg.com/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/chart.js@4.4.0/dist/chart.umd.js"></script>
+
+    <style>
+        :root { 
+            --neon-green: #00ff9d; 
+            --neon-red: #ff0055; 
+            --neon-blue: #00ccff; 
+            --neon-amber: #ffaa00; 
+            --neon-purple: #bd00ff;
+            --bg: #050505; 
+            --panel: #111; 
+        }
+        body { background-color: var(--bg); color: #ccc; font-family: 'Roboto Mono', monospace; margin: 0; padding: 0; overflow-x: hidden; font-size: 11px; }
+        
+        #app { display: flex; flex-direction: column; height: 100vh; }
+        
+        header { padding: 10px 15px; background: #000; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
+        .v-badge { background: linear-gradient(90deg, var(--neon-red), var(--neon-amber)); color: #000; padding: 2px 8px; border-radius: 4px; font-weight: 900; font-size: 0.75rem; margin-left: 10px; }
+
+        #map { height: 35vh; width: 100%; border-bottom: 2px solid var(--neon-red); }
+
+        #dashboard { flex: 1; padding: 10px; overflow-y: auto; }
+        
+        .card { background: var(--panel); border: 1px solid #333; border-radius: 6px; padding: 10px; margin-bottom: 10px; position: relative; }
+        .card h2 { margin: 0 0 10px 0; font-size: 0.75rem; color: var(--neon-blue); text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 5px; }
+
+        #term-window { background: #080808; border: 1px solid #444; height: 120px; overflow-y: scroll; font-family: 'Courier New', monospace; padding: 8px; color: #0f0; font-size: 0.65rem; margin-bottom: 5px; white-space: pre-wrap; }
+        .log-line { margin-bottom: 2px; border-bottom: 1px solid #1a1a1a; display: block; }
+
+        .input-row { display: flex; gap: 8px; margin-bottom: 10px; }
+        .input-group { flex: 1; display: flex; flex-direction: column; }
+        input, select { background: #222; border: 1px solid #444; color: #fff; padding: 8px; font-family: inherit; font-size: 0.8rem; text-align: center; border-radius: 4px; font-weight: bold; }
+        select:focus, input:focus { border-color: var(--neon-green); outline: none; }
+        
+        /* TARGET SELECTOR STYLE */
+        #cfg-target { background: #2a0000; border-color: var(--neon-red); color: var(--neon-red); }
+
+        .pred-box { border: 2px solid var(--neon-red); background: linear-gradient(180deg, rgba(255, 0, 85, 0.1), rgba(0,0,0,0)); padding: 15px; text-align: center; border-radius: 6px; margin-bottom: 10px; display: none; }
+        .pred-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        .p-val { color: #fff; font-size: 1.2rem; font-weight: bold; }
+        
+        .table-container { max-height: 200px; overflow-y: auto; border: 1px solid #222; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.7rem; }
+        th { text-align: left; color: #888; border-bottom: 1px solid #444; padding: 8px; }
+        td { padding: 6px 8px; border-bottom: 1px solid #222; color: #aaa; }
+        
+        .heat-crit { border-left: 4px solid var(--neon-red); background: rgba(255,0,85,0.1); }
+        .heat-high { border-left: 4px solid var(--neon-purple); }
+
+        button { width: 100%; padding: 14px; background: #1a1a1a; border: 1px solid var(--neon-green); color: var(--neon-green); font-family: inherit; font-weight: bold; cursor: pointer; text-transform: uppercase; margin-bottom: 30px; border-radius: 6px; }
+        button:hover { background: var(--neon-green); color: #000; }
+        button:disabled { border-color: #444; color: #444; background: #000; cursor: wait; }
+
+        .pulse-marker-major { border-radius: 50%; width: 34px; height: 34px; background: rgba(255, 0, 85, 0.2); border: 2px solid var(--neon-red); box-shadow: 0 0 15px var(--neon-red); animation: pulse 1.5s infinite; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 9px; font-weight: bold; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 0, 85, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(255, 0, 85, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 0, 85, 0); } }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <header>
+        <div>SEISMO-GNN <span class="v-badge">V4.2.1 TARGET</span></div>
+        <div id="status" style="color: var(--neon-red); font-size: 0.7rem; font-weight:bold;">STANDBY</div>
+    </header>
+
+    <div id="map"></div>
+
+    <div id="dashboard">
+
+        <div class="card" style="border: 1px solid var(--neon-red); background: rgba(255,0,85,0.05); color: #fff;">
+            <h2 style="color:var(--neon-red); margin-bottom: 10px;">⚠️ သတိပေးချက် (DISCLAIMER)</h2>
+            <div style="font-size: 0.8rem; line-height: 1.5; color: #ddd; font-family: sans-serif;">
+                ဤအက်ပ်သည် ငလျင်အခြေအနေကို <b>ခန့်မှန်းချက် (Estimation)</b> အနေဖြင့်သာ ဖော်ပြခြင်းဖြစ်ပါသည်။ <b>၁၀၀% အပြည့်အဝ မယုံကြည်ပါနှင့်။</b><br><br>
+                ဤခန့်မှန်းချက်များသည် ပညာရေးနှင့် ကိုယ်ပိုင်လေ့လာရန် ရည်ရွယ်ချက် (Educational Purpose) အတွက်သာ ဖြစ်ပါသည်။ အက်ပ်သည် စမ်းသပ်ဆဲအဆင့် (Testing Stage) တွင်သာ ရှိပါသေးသည်။ မျက်ကန်းယုံကြည်မှုဖြင့် စိုးရိမ်ပူပန်နေမည့်အစား ခန့်မှန်းခြေအခြေအနေကိုသာ သိရှိနိုင်ရန် ကြိုးပမ်းထားခြင်း ဖြစ်ပါသည်။
+            </div>
+        </div>
+        
+        <div class="card" style="border-top: 2px solid var(--neon-red);">
+            <h2 style="color:var(--neon-red)">⚠️ TARGET PRIORITY</h2>
+            <div class="input-row">
+                <div class="input-group">
+                    <label>TARGET MAGNITUDE</label>
+                    <select id="cfg-target" onchange="updateStatus()">
+                        <option value="4.0">Mag 4.0+ (Local)</option>
+                        <option value="5.0">Mag 5.0+ (Moderate)</option>
+                        <option value="6.0" selected>Mag 6.0+ (Major)</option>
+                        <option value="7.0">Mag 7.0+ (Severe)</option>
+                        <option value="8.0">Mag 8.0+ (Catastrophic)</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>FILTER NOISE</label>
+                    <select id="cfg-decluster">
+                        <option value="true" selected>ON (Remove Aftershocks)</option>
+                        <option value="false">OFF (All Data)</option>
+                    </select>
+                </div>
+            </div>
+            <div style="font-size:0.6rem; color:#666;">
+                *AI will overtrain on events matching your target.
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Region Config</h2>
+            <div class="input-row">
+                <div class="input-group">
+                    <label>LATITUDE</label>
+                    <input type="number" id="cfg-lat" value="21.95">
+                </div>
+                <div class="input-group">
+                    <label>LONGITUDE</label>
+                    <input type="number" id="cfg-lon" value="96.08">
+                </div>
+            </div>
+            <div class="input-row">
+                <div class="input-group">
+                    <label>RADIUS (deg)</label>
+                    <input type="number" id="cfg-rad" value="10.0">
+                </div>
+                <div class="input-group">
+                    <label>HISTORY (days)</label>
+                    <input type="number" id="cfg-hist" value="200">
+                </div>
+            </div>
+        </div>
+
+        <div id="result-panel" class="pred-box">
+            <h2 style="color:#fff; border:none; margin:0;">TARGET FORECAST RESULT</h2>
+            <div class="pred-grid">
+                <div class="p-item">
+                    <div style="color:#888; font-size:0.6rem;">MAGNITUDE</div>
+                    <div class="p-val" id="out-mag" style="color:var(--neon-red)">--</div>
+                </div>
+                <div class="p-item">
+                    <div style="color:#888; font-size:0.6rem;">DEPTH</div>
+                    <div class="p-val" id="out-depth">--</div>
+                </div>
+                <div class="p-item">
+                    <div style="color:#888; font-size:0.6rem;">EST. ARRIVAL</div>
+                    <div class="p-val" id="out-time" style="font-size:0.9rem; line-height:2rem;">--</div>
+                </div>
+                <div class="p-item">
+                    <div style="color:#888; font-size:0.6rem;">LOCATION</div>
+                    <div class="p-val" id="out-loc" style="font-size:0.8rem; line-height:2rem;">--</div>
+                </div>
+            </div>
+            <div style="margin-top:10px; font-size:0.7rem; color:#aaa;">Primary Precursor: <span id="out-cause" style="color:#fff; font-weight:bold;">--</span></div>
+        </div>
+
+        <div class="card">
+            <h2>Training Logs (Priority Mode)</h2>
+            <div id="term-window">
+                <div style="color: #666;">> System v4.2.1 Ready.<br>> Select Target Magnitude to begin.</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Seismic Stress Attention</h2>
+            <div style="height: 80px;">
+                <canvas id="attnChart"></canvas>
+            </div>
+            <div class="table-container" style="margin-top: 10px;">
+                <table id="attn-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th style="text-align:center;">Mag</th>
+                            <th style="text-align:right;">Influence</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td colspan="3" style="text-align:center; padding:10px; color:#444;">--</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <button id="btn-run" onclick="runPipeline()">START ANALYSIS</button>
+        <div style="height: 50px;"></div>
+    </div>
+</div>
+
+<script>
+// ============================================================================
+// SYSTEM CONFIG V4.2.1
+// ============================================================================
+let CONFIG = {
+    LAT: 21.95, LON: 96.08, RAD: 10.0, DAYS: 200,
+    SEQ_LEN: 30, EPOCHS: 4, BATCH: 64,
+    DECLUSTER: true,
+    TARGET_MAG: 6.0 // Default
+};
+
+let map, targetMarker, markersLayer, forecastLayer;
+let rawData = [];
+let model;
+let charts = {};
+let scaler = {};
+
+// ============================================================================
+// INITIALIZATION
+// ============================================================================
+window.onload = function() {
+    initMap();
+    initCharts();
+    updateStatus();
+    log("V4.2.1 Loaded. Select Target Magnitude above.", 'info');
+};
+
+function updateStatus() {
+    const t = document.getElementById('cfg-target').value;
+    document.getElementById('status').innerText = `HUNTING: M${t}+`;
+}
+
+function initMap() {
+    map = L.map('map').setView([CONFIG.LAT, CONFIG.LON], 5);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; CartoDB' }).addTo(map);
+    markersLayer = L.layerGroup().addTo(map);
+    forecastLayer = L.layerGroup().addTo(map);
+    
+    targetMarker = L.marker([CONFIG.LAT, CONFIG.LON], {draggable: true}).addTo(map);
+    targetMarker.on('dragend', e => {
+        const p = e.target.getLatLng();
+        document.getElementById('cfg-lat').value = p.lat.toFixed(4);
+        document.getElementById('cfg-lon').value = p.lng.toFixed(4);
+    });
+}
+
+function initCharts() {
+    const ctx = document.getElementById('attnChart').getContext('2d');
+    charts.attn = new Chart(ctx, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label: 'Physics Stress', data: [], borderColor: '#ff0055', backgroundColor: 'rgba(255,0,85,0.2)', fill: true, tension: 0.3 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { display: false } }, elements: { point: { radius: 0 } } }
+    });
+}
+
+function log(msg, type='info') {
+    const t = document.getElementById('term-window');
+    const div = document.createElement('div');
+    if(type === 'metric') {
+        div.className = 'log-line';
+        div.innerHTML = msg;
+    } else {
+        div.innerText = `> ${msg}`;
+        div.style.color = type === 'error' ? '#ff0055' : '#ccc';
+    }
+    t.appendChild(div);
+    t.scrollTop = t.scrollHeight;
+}
+
+// ============================================================================
+// PIPELINE
+// ============================================================================
+async function runPipeline() {
+    const btn = document.getElementById('btn-run');
+    btn.disabled = true;
+    btn.innerText = "PROCESSING..."; 
+    
+    // Read Config
+    CONFIG.LAT = parseFloat(document.getElementById('cfg-lat').value);
+    CONFIG.LON = parseFloat(document.getElementById('cfg-lon').value);
+    CONFIG.RAD = parseFloat(document.getElementById('cfg-rad').value);
+    CONFIG.DAYS = parseInt(document.getElementById('cfg-hist').value);
+    CONFIG.DECLUSTER = document.getElementById('cfg-decluster').value === 'true';
+    CONFIG.TARGET_MAG = parseFloat(document.getElementById('cfg-target').value);
+
+    try {
+        log(`Target set to M${CONFIG.TARGET_MAG}+. Fetching Data...`, 'info');
+        const end = new Date();
+        const start = new Date(); 
+        start.setDate(end.getDate() - CONFIG.DAYS);
+        
+        // Fetch slightly wider net than target to see precursors
+        const targetUrl = `https://www.seismicportal.eu/fdsnws/event/1/query?format=json&lat=${CONFIG.LAT}&lon=${CONFIG.LON}&maxradius=${CONFIG.RAD}&minmag=3.0&limit=2500&starttime=${start.toISOString()}&endtime=${end.toISOString()}&orderby=time`;
+        
+        const res = await fetch(targetUrl);
+        if (!res.ok) throw new Error(`API Error: ${res.status}`);
+        
+        const json = await res.json();
+        if(!json.features || !json.features.length) throw new Error("No events found.");
+        
+        let processedData = json.features.map(f => ({
+            t: new Date(f.properties.time),
+            lat: f.geometry.coordinates[1],
+            lon: f.geometry.coordinates[0],
+            depth: f.geometry.coordinates[2],
+            mag: f.properties.mag,
+            id: f.id
+        })).sort((a,b) => a.t - b.t);
+
+        log(`Raw: ${processedData.length} events.`, 'info');
+
+        // 1. DECLUSTERING
+        if(CONFIG.DECLUSTER) {
+            log("Removing Aftershocks (Gardner-Knopoff)...", 'info');
+            processedData = decluster(processedData);
+            log(`Mainshocks Remaining: ${processedData.length}`, 'info');
+        }
+
+        renderMapPoints(processedData);
+
+        if(processedData.length < CONFIG.SEQ_LEN + 10) throw new Error("Not enough data. Increase history/radius.");
+
+        // 2. TENSORS (Dynamic Oversampling based on Target)
+        const tensors = prepareTensors(processedData);
+        
+        log(`Building GNN. Target M${CONFIG.TARGET_MAG}+ prioritized.`, 'info');
+        if(model) model.dispose();
+        model = buildModel(7); 
+        
+        log("--------------------------------------------------", 'info');
+        btn.innerText = "TRAINING...";
+        await train(model, tensors);
+        log("--------------------------------------------------", 'info');
+
+        await predict(model, processedData);
+        btn.innerText = "RUN NEW ANALYSIS";
+
+    } catch(e) {
+        log("ERROR: " + e.message, 'error');
+        console.error(e);
+        btn.innerText = "RETRY";
+    }
+    btn.disabled = false;
+}
+
+// Gardner-Knopoff Lite
+function decluster(data) {
+    let sorted = [...data].sort((a,b) => b.mag - a.mag);
+    let removedIds = new Set();
+    let keep = [];
+    sorted.forEach(main => {
+        if(removedIds.has(main.id)) return;
+        keep.push(main);
+        const T_days = Math.pow(10, 0.5 * main.mag - 0.5); 
+        const D_km = Math.pow(10, 0.25 * main.mag + 0.5); 
+        data.forEach(sub => {
+            if(sub.id === main.id || removedIds.has(sub.id)) return;
+            const dt = (sub.t - main.t) / (1000*3600*24); 
+            if (dt < 0 || dt > T_days) return;
+            const dist = getDist(main.lat, main.lon, sub.lat, sub.lon);
+            if (dist < D_km) removedIds.add(sub.id);
+        });
+    });
+    return keep.sort((a,b) => a.t - b.t);
+}
+
+function getDist(lat1, lon1, lat2, lon2) {
+    const R = 6371; 
+    const dLat = (lat2-lat1) * Math.PI/180;
+    const dLon = (lon2-lon1) * Math.PI/180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function renderMapPoints(data) {
+    markersLayer.clearLayers();
+    forecastLayer.clearLayers();
+    data.slice(-50).forEach(d => {
+        const col = d.mag >= CONFIG.TARGET_MAG ? '#ff0055' : (d.mag >= CONFIG.TARGET_MAG - 1 ? '#ffaa00' : '#444');
+        L.circleMarker([d.lat, d.lon], { radius: d.mag*1.5, color: col, weight: 1, fillOpacity: 0.5 }).addTo(markersLayer);
+    });
+}
+
+// ============================================================================
+// FEATURE ENGINEERING (DYNAMIC OVERSAMPLING)
+// ============================================================================
+function prepareTensors(data) {
+    const N = CONFIG.SEQ_LEN;
+    const WINDOW = 30;
+
+    // Physics Pre-calc
+    let cumBenioff = 0;
+    let rollingMag = [];
+    
+    data.forEach(d => {
+        cumBenioff += Math.pow(10, 0.75 * d.mag);
+        d.benioff = cumBenioff;
+        rollingMag.push(d.mag);
+        if(rollingMag.length > WINDOW) rollingMag.shift();
+        if(rollingMag.length < 10) d.b_val = 1.0;
+        else {
+            const mean = rollingMag.reduce((a,b)=>a+b,0)/rollingMag.length;
+            const min = Math.min(...rollingMag);
+            d.b_val = 0.4343 / (mean - min + 0.05);
+        }
+    });
+
+    // Normalize
+    scaler = {
+        minLat: Math.min(...data.map(d=>d.lat)), maxLat: Math.max(...data.map(d=>d.lat)),
+        minLon: Math.min(...data.map(d=>d.lon)), maxLon: Math.max(...data.map(d=>d.lon)),
+        minMag: 3.0, maxMag: 9.0,
+        minDepth: 0, maxDepth: 200,
+        maxBenioff: Math.max(...data.map(d=>d.benioff)),
+        maxB: 2.5,
+        avgGap: (data[data.length-1].t - data[0].t) / data.length
+    };
+
+    const feats = data.map((d, i) => {
+        const gap = i === 0 ? 0 : (d.t - data[i-1].t);
+        return [
+            Math.min(gap / (scaler.avgGap * 10), 1.0),
+            (d.mag - scaler.minMag) / (scaler.maxMag - scaler.minMag),
+            (d.lat - scaler.minLat) / (scaler.maxLat - scaler.minLat),
+            (d.lon - scaler.minLon) / (scaler.maxLon - scaler.minLon),
+            Math.min(d.depth / scaler.maxDepth, 1.0),
+            d.benioff / scaler.maxBenioff,
+            Math.min(d.b_val / scaler.maxB, 1.0)
+        ];
+    });
+
+    const X=[], A=[], Y_mag=[], Y_time=[], Y_loc=[], Y_depth=[];
+
+    function addSample(i) {
+        X.push(feats.slice(i, i+N));
+        const adj = [];
+        const sliceLocs = data.slice(i, i+N);
+        for(let r=0; r<N; r++) {
+            const row = [];
+            for(let c=0; c<N; c++) {
+                if(r===c) { row.push(1); continue; }
+                const d = getDist(sliceLocs[r].lat, sliceLocs[r].lon, sliceLocs[c].lat, sliceLocs[c].lon);
+                row.push(Math.exp(-d / 150));
+            }
+            adj.push(row);
+        }
+        A.push(adj);
+        const target = feats[i+N];
+        const lastInSeq = feats[i+N-1];
+        Y_mag.push([target[1]]);
+        Y_time.push([target[0]]);
+        Y_loc.push([target[2] - lastInSeq[2], target[3] - lastInSeq[3]]);
+        Y_depth.push([target[4]]);
+    }
+
+    // *** DYNAMIC PRIORITY LOGIC ***
+    for(let i=0; i < feats.length - N; i++) {
+        addSample(i); // Always add once
+
+        const mag = data[i+N].mag;
+        const TARGET = CONFIG.TARGET_MAG;
+        let repeats = 0;
+
+        // If event matches user target -> HEAVY OVERSAMPLE
+        if(mag >= TARGET) {
+            repeats = 30; 
+        } 
+        // If event is close (within 1.0) -> MODERATE OVERSAMPLE
+        else if(mag >= TARGET - 1.0) {
+            repeats = 5;
+        }
+
+        for(let r=0; r<repeats; r++) {
+            addSample(i);
+        }
+    }
+
+    return {
+        x: tf.tensor3d(X),
+        a: tf.tensor3d(A),
+        y_mag: tf.tensor2d(Y_mag),
+        y_time: tf.tensor2d(Y_time),
+        y_loc: tf.tensor2d(Y_loc),
+        y_depth: tf.tensor2d(Y_depth)
+    };
+}
+
+// ============================================================================
+// MODEL
+// ============================================================================
+function buildModel(features) {
+    const N = CONFIG.SEQ_LEN;
+    const inputX = tf.input({shape: [N, features], name: 'In_Seq'});
+    const inputA = tf.input({shape: [N, N], name: 'In_Adj'});
+
+    let x = tf.layers.dense({units: 32, activation: 'tanh'}).apply(inputX);
+    let graph = tf.layers.dot({axes: [2, 1]}).apply([inputA, x]); 
+    graph = tf.layers.dropout({rate: 0.1}).apply(graph);
+
+    let att = tf.layers.dense({units: 1, activation: 'tanh'}).apply(graph); 
+    att = tf.layers.flatten().apply(att);
+    let weights = tf.layers.softmax({name: 'Attention_Weights'}).apply(att);
+    
+    let context = tf.layers.dot({axes: [1, 1]}).apply([weights, graph]);
+    
+    let processed = tf.layers.dense({units: 64, activation: 'relu'}).apply(context);
+
+    const outMag = tf.layers.dense({units: 1, name: 'Mag_Head'}).apply(processed);
+    const outTime = tf.layers.dense({units: 1, name: 'Time_Head'}).apply(processed);
+    const outLoc = tf.layers.dense({units: 2, name: 'Loc_Head'}).apply(processed);
+    const outDepth = tf.layers.dense({units: 1, name: 'Depth_Head'}).apply(processed);
+
+    const model = tf.model({inputs: [inputX, inputA], outputs: [outMag, outTime, outLoc, outDepth]});
+    
+    model.compile({
+        optimizer: tf.train.adam(0.002),
+        loss: ['meanSquaredError', 'meanSquaredError', 'meanSquaredError', 'meanSquaredError']
+    });
+    return model;
+}
+
+async function train(model, data) {
+    await model.fit([data.x, data.a], [data.y_mag, data.y_time, data.y_loc, data.y_depth], {
+        epochs: CONFIG.EPOCHS,
+        batchSize: CONFIG.BATCH,
+        shuffle: true,
+        callbacks: {
+            onEpochEnd: (epoch, logs) => {
+               
+                    const lTot = logs['loss'].toFixed(4);
+                    log(`<span class='log-ep'>Ep ${epoch+1}:</span> Total Loss: ${lTot}`, 'metric');
+                
+            }
+        }
+    });
+}
+
+// ============================================================================
+// PREDICT
+// ============================================================================
+async function predict(model, rawData) {
+    const N = CONFIG.SEQ_LEN;
+    const lastData = rawData.slice(-N);
+    const tempTensors = prepareTensors(lastData.concat([lastData[lastData.length-1]]));
+    
+    const x = tempTensors.x.slice([0,0,0], [1, -1, -1]);
+    const a = tempTensors.a.slice([0,0,0], [1, -1, -1]);
+    
+    const preds = model.predict([x, a]);
+    const pMag = (await preds[0].data())[0];
+    const pTime = (await preds[1].data())[0];
+    const pLocDelta = await preds[2].data();
+    const pDepth = (await preds[3].data())[0];
+    
+    const attnModel = tf.model({inputs: model.inputs, outputs: model.getLayer('Attention_Weights').output});
+    const attnWeights = await attnModel.predict([x, a]).data();
+
+    const realMag = pMag * (scaler.maxMag - scaler.minMag) + scaler.minMag;
+    const realDepth = pDepth * scaler.maxDepth;
+    const lastEvt = lastData[lastData.length-1];
+    const dLat = pLocDelta[0] * (scaler.maxLat - scaler.minLat);
+    const dLon = pLocDelta[1] * (scaler.maxLon - scaler.minLon);
+    const realLat = lastEvt.lat + dLat;
+    const realLon = lastEvt.lon + dLon;
+    const gapMs = pTime * (scaler.avgGap * 10);
+    const nextTime = new Date(lastEvt.t.getTime() + gapMs);
+
+    document.getElementById('result-panel').style.display = 'block';
+    
+    const magEl = document.getElementById('out-mag');
+    magEl.innerText = "M" + realMag.toFixed(2);
+    // Dynamic color based on target relation
+    if(realMag >= CONFIG.TARGET_MAG) magEl.style.color = '#ff0055'; // Red if hitting target
+    else if(realMag >= CONFIG.TARGET_MAG - 1) magEl.style.color = '#ffaa00'; // Orange if close
+    else magEl.style.color = '#00ccff'; // Blue if below target
+
+    document.getElementById('out-depth').innerText = realDepth.toFixed(1) + " km";
+    document.getElementById('out-time').innerText = nextTime.toLocaleString('en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    document.getElementById('out-loc').innerText = `${realLat.toFixed(2)}, ${realLon.toFixed(2)}`;
+
+    const icon = L.divIcon({ 
+        className: 'pulse-marker-major', 
+        html: `<div>${realMag.toFixed(1)}</div>`,
+    });
+    L.marker([realLat, realLon], {icon: icon}).addTo(forecastLayer)
+     .bindPopup(`<b>v4.2.1 FORECAST</b><br>Target: M${CONFIG.TARGET_MAG}+<br>Pred: M${realMag.toFixed(2)}`).openPopup();
+    
+    L.polyline([[lastEvt.lat, lastEvt.lon], [realLat, realLon]], {color: '#bd00ff', weight: 2, dashArray: '5,5'}).addTo(forecastLayer);
+
+    charts.attn.data.labels = lastData.map((d,i)=>i);
+    charts.attn.data.datasets[0].data = Array.from(attnWeights);
+    charts.attn.update();
+
+    renderTable(lastData, attnWeights);
+    
+    const maxW = Math.max(...attnWeights);
+    const maxIdx = attnWeights.indexOf(maxW);
+    document.getElementById('out-cause').innerText = `Seq Idx ${maxIdx} (M${lastData[maxIdx].mag})`;
+}
+
+function renderTable(data, weights) {
+    const tbody = document.querySelector('#attn-table tbody');
+    tbody.innerHTML = '';
+    const maxW = Math.max(...weights);
+
+    // Loop backwards: i = data.length - 1 is the LATEST event
+    for (let i = data.length - 1; i >= 0; i--) {
+        const d = data[i];
+        const w = weights[i];
+        
+        // Calculate Heatmap styling
+        const heat = w > 0.8 * maxW ? 'heat-crit' : (w > 0.6 * maxW ? 'heat-high' : '');
+        
+        const tr = document.createElement('tr');
+        if(heat) tr.className = heat;
+
+        // Render Row
+        tr.innerHTML = `
+            <td style="color:#fff; font-family:monospace;">
+                ${d.t.toISOString().slice(5, 10)} 
+                <span style="color:#666; font-size:0.6rem;">${d.t.toISOString().slice(11, 16)}</span>
+            </td>
+            <td style="text-align:center; font-weight:bold; color:${d.mag >= CONFIG.TARGET_MAG ? '#ff0055' : '#ccc'}">
+                ${d.mag.toFixed(1)}
+            </td>
+            <td style="text-align:right; font-family:monospace; color:${heat ? '#fff' : '#666'};">
+                ${(w*100).toFixed(1)}%
+            </td>
+        `;
+        tbody.appendChild(tr);
+    }
+}
+
+</script>
+</body>
+</html>
